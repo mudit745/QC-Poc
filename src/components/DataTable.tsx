@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronRight, MessageCircle, Lock, Unlock, Plus, X, AlertTriangle, Calendar, Bell } from 'lucide-react';
+import { ChevronDown, ChevronRight, MessageCircle, Plus, X, AlertTriangle, Calendar, Lock } from 'lucide-react';
 import { BusinessRule, Thread, Comment } from '../types';
 import AddThreadModal from './AddThreadModal';
 
@@ -18,9 +18,9 @@ interface DataTableProps {
   onAddThread: (ruleId: string, title: string) => void;
   actionStatusOptions: string[];
   priorityOptions: { value: string; label: string }[];
-  threadStatusFilter: string;
-  threadTitleFilter: string;
-  businessRuleFilter: string;
+  threadStatusFilter: string[];
+  threadTitleFilter: string[];
+  businessRuleFilter: string[];
 }
 
 const DataTable: React.FC<DataTableProps> = ({
@@ -233,12 +233,6 @@ const DataTable: React.FC<DataTableProps> = ({
     };
   };
 
-  // Handle nudge functionality
-  const handleNudge = (thread: Thread) => {
-    // For now, just log - this would be implemented with actual nudge functionality
-    console.log('Nudging thread:', thread.id);
-    // TODO: Implement actual nudge functionality
-  };
 
   const handleAddThread = (ruleId: string, description: string) => {
     setSelectedRuleId(ruleId);
@@ -268,7 +262,7 @@ const DataTable: React.FC<DataTableProps> = ({
       setCloseThreadDialog({ isOpen: true, thread });
     } else {
       // Thread is open, check if it can be closed
-      if (thread.actionStatus === 'Verified' || thread.actionStatus === 'Skipped') {
+      if (thread.actionStatus === 'No Error' || thread.actionStatus === 'Error') {
         // Can close the thread
         setCloseThreadDialog({ isOpen: true, thread });
       } else {
@@ -281,7 +275,7 @@ const DataTable: React.FC<DataTableProps> = ({
   const handleConfirmCloseThread = () => {
     if (closeThreadDialog.thread) {
       // Close the thread
-      onToggleThread(closeThreadDialog.thread.id);
+      onCloseThread(closeThreadDialog.thread.id);
       setCloseThreadDialog({ isOpen: false, thread: null });
       setClosureComment('');
     }
@@ -318,13 +312,13 @@ const DataTable: React.FC<DataTableProps> = ({
                 let ruleThreads = threads.filter(thread => thread.ruleId === rule.id);
                 
                 // Apply thread status filter
-                if (threadStatusFilter !== 'All') {
-                  ruleThreads = ruleThreads.filter(thread => thread.status === threadStatusFilter);
+                if (!threadStatusFilter.includes('All')) {
+                  ruleThreads = ruleThreads.filter(thread => threadStatusFilter.includes(thread.status));
                 }
                 
                 // Apply thread title filter (cascading - only if business rule is selected)
-                if (threadTitleFilter !== 'All') {
-                  ruleThreads = ruleThreads.filter(thread => thread.title === threadTitleFilter);
+                if (!threadTitleFilter.includes('All')) {
+                  ruleThreads = ruleThreads.filter(thread => threadTitleFilter.includes(thread.title));
                 }
                 
                 // Sort threads: Open threads first, then Closed threads
@@ -479,31 +473,6 @@ const DataTable: React.FC<DataTableProps> = ({
                                                 {thread.status}
                                               </span>
                                               
-                                              {/* SLA Information */}
-                                              {(() => {
-                                                const slaInfo = getSLAInfo(thread);
-                                                return (
-                                                  <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                                    slaInfo.isOverdue 
-                                                      ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                                      : slaInfo.daysUntilDue <= 1
-                                                      ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                                                      : 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                  }`}>
-                                                    {slaInfo.isOverdue ? (
-                                                      <>
-                                                        <AlertTriangle className="h-3 w-3 mr-1" />
-                                                        {slaInfo.overdueDays}d overdue
-                                                      </>
-                                                    ) : (
-                                                      <>
-                                                        <Calendar className="h-3 w-3 mr-1" />
-                                                        Due {slaInfo.daysUntilDue}d
-                                                      </>
-                                                    )}
-                                                  </span>
-                                                );
-                                              })()}
                                               
                                               {/* Priority Badge */}
                                               <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -516,68 +485,40 @@ const DataTable: React.FC<DataTableProps> = ({
                                                 {thread.priority}
                                               </span>
                                               
-                                              {/* Action Status Badge */}
-                                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                                thread.actionStatus === 'Action Required' 
-                                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                                  : thread.actionStatus === 'In Progress'
-                                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                                  : thread.actionStatus === 'Completed'
-                                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                  : thread.actionStatus === 'On Hold'
-                                                  ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                                                  : thread.actionStatus === 'Verified'
-                                                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                                                  : thread.actionStatus === 'Skipped'
-                                                  ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                              }`}>
-                                                {thread.actionStatus}
-                                              </span>
                                               
                                               {/* Thread Creation Date */}
                                               <span className="text-xs text-gray-500 dark:text-gray-400">
                                                 Opened: {formatDate(thread.createdAt)}
                                               </span>
                                               
-                                              {/* Comment Count */}
-                                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                {thread.comments.length} comments
-                                              </span>
-                                              
-                                              {/* Nudge Count */}
-                                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                Nudges: {thread.nudges.length}
-                                              </span>
                                             </div>
                                           </div>
                                           
                                           {/* Action Buttons - Right Side */}
                                           <div className="flex items-center space-x-2 flex-shrink-0">
-                                            {/* Nudge Button */}
-                                            <button
-                                              onClick={() => handleNudge(thread)}
-                                              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                                              title={`Send nudge (${thread.nudges.length} nudges sent)`}
-                                            >
-                                              <Bell className="h-4 w-4" />
-                                            </button>
                                             
-                                            <button
-                                              onClick={() => handleCloseThreadClick(thread)}
-                                              className={`p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200 ${
-                                                thread.status === 'Open' 
-                                                  ? 'text-orange-600 hover:text-orange-700 dark:text-orange-400' 
-                                                  : 'text-green-600 hover:text-green-700 dark:text-green-400'
-                                              }`}
-                                              title={thread.status === 'Open' ? 'Close thread' : 'Reopen thread'}
-                                            >
-                                              {thread.status === 'Open' ? (
-                                                <Lock className="h-4 w-4" />
-                                              ) : (
-                                                <Unlock className="h-4 w-4" />
-                                              )}
-                                            </button>
+                                            <div className="flex items-center">
+                                              <button
+                                                onClick={() => handleCloseThreadClick(thread)}
+                                                className={`relative inline-flex h-6 w-16 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                                                  thread.status === 'Open' 
+                                                    ? 'bg-green-500 focus:ring-green-500' 
+                                                    : 'bg-gray-400 focus:ring-gray-400'
+                                                }`}
+                                                title={thread.status === 'Open' ? 'Close thread' : 'Reopen thread'}
+                                              >
+                                                <span
+                                                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                                                    thread.status === 'Open' ? 'translate-x-1' : 'translate-x-11'
+                                                  }`}
+                                                />
+                                                <span className={`absolute text-xs font-medium text-white transition-opacity duration-200 ${
+                                                  thread.status === 'Open' ? 'right-1 opacity-100' : 'left-1 opacity-100'
+                                                }`}>
+                                                  {thread.status === 'Open' ? 'Open' : 'Closed'}
+                                                </span>
+                                              </button>
+                                            </div>
                                             
                                             <button
                                               onClick={() => onOpenChat(rule.id, thread.id)}
@@ -606,8 +547,11 @@ const DataTable: React.FC<DataTableProps> = ({
                                               <select
                                                 value={thread.actionStatus}
                                                 onChange={(e) => onActionStatusChange(thread.id, e.target.value)}
+                                                disabled={thread.status === 'Closed'}
                                                 className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
-                                                  thread.actionStatus === 'Action Required' 
+                                                  thread.status === 'Closed'
+                                                    ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed opacity-60'
+                                                    : thread.actionStatus === 'Action Required' 
                                                     ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                                                     : thread.actionStatus === 'In Progress'
                                                     ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
@@ -615,13 +559,13 @@ const DataTable: React.FC<DataTableProps> = ({
                                                     ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                                                     : thread.actionStatus === 'On Hold'
                                                     ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                                                    : thread.actionStatus === 'Verified'
-                                                    ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                                                    : thread.actionStatus === 'Skipped'
-                                                    ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                                                  : thread.actionStatus === 'No Error'
+                                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                                                  : thread.actionStatus === 'Error'
+                                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                                                     : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                                                 }`}
-                                                title="Change action status"
+                                                title={thread.status === 'Closed' ? 'Cannot change status - thread is closed' : 'Change action status'}
                                               >
                                                 {actionStatusOptions.map((status) => (
                                                   <option key={status} value={status}>
@@ -632,8 +576,11 @@ const DataTable: React.FC<DataTableProps> = ({
                                               <select
                                                 value={thread.priority}
                                                 onChange={(e) => onPriorityChange(thread.id, e.target.value)}
+                                                disabled={thread.status === 'Closed'}
                                                 className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
-                                                  thread.priority === 'P1' 
+                                                  thread.status === 'Closed'
+                                                    ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed opacity-60'
+                                                    : thread.priority === 'P1' 
                                                     ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                                                     : thread.priority === 'P2'
                                                     ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
@@ -641,7 +588,7 @@ const DataTable: React.FC<DataTableProps> = ({
                                                     ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                                                     : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                                                 }`}
-                                                title="Change priority"
+                                                title={thread.status === 'Closed' ? 'Cannot change priority - thread is closed' : 'Change priority'}
                                               >
                                                 {priorityOptions.map((priority) => (
                                                   <option key={priority.value} value={priority.value}>
@@ -788,7 +735,7 @@ const DataTable: React.FC<DataTableProps> = ({
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {closeThreadDialog.thread.actionStatus === 'Verified' || closeThreadDialog.thread.actionStatus === 'Skipped' ? (
+                        {closeThreadDialog.thread.actionStatus === 'No Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
                           <div className="space-y-2">
                             <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
                               <Lock className="h-5 w-5" />
@@ -850,7 +797,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     >
                       Understood
                     </button>
-                  ) : closeThreadDialog.thread.actionStatus === 'Verified' || closeThreadDialog.thread.actionStatus === 'Skipped' ? (
+                  ) : closeThreadDialog.thread.actionStatus === 'No Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
                     <>
                       <button
                         type="button"

@@ -20,24 +20,14 @@ export interface Comment {
   isRead?: boolean;
 }
 
-export interface Nudge {
-  id: string;
-  threadId: string;
-  fromUser: 'QC' | 'SM';
-  toUser: 'QC' | 'SM';
-  timestamp: string;
-  message: string;
-}
-
 export interface Thread {
   id: string;
   title: string;
   ruleId: string;
   status: 'Open' | 'Closed';
-  actionStatus: 'Action Required' | 'In Progress' | 'On Hold' | 'Completed' | 'Verified' | 'Skipped';
+  actionStatus: 'Action Required' | 'In Progress' | 'On Hold' | 'Completed' | 'Error' | 'No Error';
   priority: 'P1' | 'P2' | 'P3';
   comments: Comment[];
-  nudges: Nudge[];
   dueDate: string; // SLA due date
   createdAt: string;
   updatedAt: string;
@@ -45,10 +35,10 @@ export interface Thread {
 
 export interface FilterState {
   moduleName: string;
-  status: string;
-  threadStatus: string;
-  businessRule: string;
-  threadTitle: string;
+  status: string[];
+  threadStatus: string[];
+  businessRule: string[];
+  threadTitle: string[];
 }
 
 export interface ChatPanelState {

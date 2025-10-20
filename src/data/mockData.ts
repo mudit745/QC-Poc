@@ -1,4 +1,4 @@
-import { BusinessRule, Thread, Nudge } from '../types';
+import { BusinessRule, Thread } from '../types';
 
 export const mockBusinessRules: BusinessRule[] = [
   {
@@ -231,32 +231,6 @@ export const mockThreads: Thread[] = [
         isRead: false
       }
     ],
-    nudges: [
-      {
-        id: 'nudge-1',
-        threadId: 'thread-1',
-        fromUser: 'QC',
-        toUser: 'SM',
-        timestamp: getRecentDate(21),
-        message: 'Please expedite helmet order - safety critical'
-      },
-      {
-        id: 'nudge-2',
-        threadId: 'thread-1',
-        fromUser: 'QC',
-        toUser: 'SM',
-        timestamp: getRecentDate(20),
-        message: 'Still waiting for helmets - operations affected'
-      },
-      {
-        id: 'nudge-3',
-        threadId: 'thread-1',
-        fromUser: 'SM',
-        toUser: 'QC',
-        timestamp: getRecentDate(19),
-        message: 'Helmets arriving today - will update once received'
-      }
-    ],
     dueDate: getDueDate(-20), // 20 days overdue
     createdAt: getRecentDate(22),
     updatedAt: getRecentDate(20)
@@ -286,24 +260,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [
-      {
-        id: 'nudge-4',
-        threadId: 'thread-2',
-        fromUser: 'QC',
-        toUser: 'SM',
-        timestamp: getRecentDate(15),
-        message: 'Fire inspection overdue - safety violation risk'
-      },
-      {
-        id: 'nudge-5',
-        threadId: 'thread-2',
-        fromUser: 'QC',
-        toUser: 'SM',
-        timestamp: getRecentDate(14),
-        message: 'Need immediate action on fire inspection'
-      }
-    ],
     dueDate: getDueDate(-13), // 13 days overdue
     createdAt: getRecentDate(15),
     updatedAt: getRecentDate(14)
@@ -331,16 +287,6 @@ export const mockThreads: Thread[] = [
         timestamp: getRecentDate(7),
         threadId: 'thread-3',
         isRead: true
-      }
-    ],
-    nudges: [
-      {
-        id: 'nudge-6',
-        threadId: 'thread-3',
-        fromUser: 'QC',
-        toUser: 'SM',
-        timestamp: getRecentDate(8),
-        message: 'Electrical violations need immediate attention'
       }
     ],
     dueDate: getDueDate(-7), // 7 days overdue
@@ -382,16 +328,6 @@ export const mockThreads: Thread[] = [
         isRead: false
       }
     ],
-    nudges: [
-      {
-        id: 'nudge-7',
-        threadId: 'thread-4',
-        fromUser: 'QC',
-        toUser: 'SM',
-        timestamp: getRecentDate(2),
-        message: 'Need training details for resource planning'
-      }
-    ],
     dueDate: getDueDate(1), // Due tomorrow
     createdAt: getRecentDate(3),
     updatedAt: getRecentDate(1)
@@ -429,7 +365,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(2), // Due in 2 days
     createdAt: getRecentDate(5),
     updatedAt: getRecentDate(3)
@@ -467,7 +402,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(3), // Due in 3 days
     createdAt: getRecentDate(6),
     updatedAt: getRecentDate(4)
@@ -499,7 +433,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(-10), // Completed 10 days ago
     createdAt: getRecentDate(12),
     updatedAt: getRecentDate(9)
@@ -509,7 +442,7 @@ export const mockThreads: Thread[] = [
     title: 'Temperature monitoring system',
     ruleId: 'rule-2',
     status: 'Closed',
-    actionStatus: 'Verified',
+    actionStatus: 'No Error',
     priority: 'P2',
     comments: [
       {
@@ -529,7 +462,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(-8), // Verified 8 days ago
     createdAt: getRecentDate(10),
     updatedAt: getRecentDate(7)
@@ -577,16 +509,6 @@ export const mockThreads: Thread[] = [
         isRead: false
       }
     ],
-    nudges: [
-      {
-        id: 'nudge-8',
-        threadId: 'thread-9',
-        fromUser: 'QC',
-        toUser: 'SM',
-        timestamp: getRecentDate(5),
-        message: 'Need timeline update for PPE system'
-      }
-    ],
     dueDate: getDueDate(5), // Due in 5 days
     createdAt: getRecentDate(7),
     updatedAt: getRecentDate(4)
@@ -616,7 +538,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(4), // Due in 4 days
     createdAt: getRecentDate(9),
     updatedAt: getRecentDate(8)
@@ -648,7 +569,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(6), // Due in 6 days
     createdAt: getRecentDate(12),
     updatedAt: getRecentDate(11)
@@ -660,7 +580,7 @@ export const mockThreads: Thread[] = [
     title: 'Chemical storage ventilation',
     ruleId: 'rule-3',
     status: 'Closed',
-    actionStatus: 'Skipped',
+    actionStatus: 'Error',
     priority: 'P3',
     comments: [
       {
@@ -680,7 +600,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(-15), // Skipped 15 days ago
     createdAt: getRecentDate(17),
     updatedAt: getRecentDate(14)
@@ -712,7 +631,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(2), // Due in 2 days
     createdAt: getRecentDate(1),
     updatedAt: getRecentDate(0)
@@ -742,7 +660,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(-5), // Completed 5 days ago
     createdAt: getRecentDate(7),
     updatedAt: getRecentDate(4)
@@ -752,7 +669,7 @@ export const mockThreads: Thread[] = [
     title: 'Quality control sampling procedures',
     ruleId: 'rule-3',
     status: 'Closed',
-    actionStatus: 'Verified',
+    actionStatus: 'No Error',
     priority: 'P2',
     comments: [
       {
@@ -772,7 +689,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(-6), // Verified 6 days ago
     createdAt: getRecentDate(8),
     updatedAt: getRecentDate(5)
@@ -804,16 +720,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [
-      {
-        id: 'nudge-9',
-        threadId: 'thread-16',
-        fromUser: 'QC',
-        toUser: 'SM',
-        timestamp: getRecentDate(12),
-        message: 'Safety equipment calibration overdue - compliance risk'
-      }
-    ],
     dueDate: getDueDate(-12), // 12 days overdue
     createdAt: getRecentDate(12),
     updatedAt: getRecentDate(11)
@@ -843,7 +749,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(1), // Due tomorrow
     createdAt: getRecentDate(4),
     updatedAt: getRecentDate(3)
@@ -873,7 +778,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(3), // Due in 3 days
     createdAt: getRecentDate(6),
     updatedAt: getRecentDate(5)
@@ -903,7 +807,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(5), // Due in 5 days
     createdAt: getRecentDate(8),
     updatedAt: getRecentDate(7)
@@ -933,7 +836,6 @@ export const mockThreads: Thread[] = [
         isRead: true
       }
     ],
-    nudges: [],
     dueDate: getDueDate(7), // Due in 7 days
     createdAt: getRecentDate(10),
     updatedAt: getRecentDate(9)

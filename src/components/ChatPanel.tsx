@@ -13,6 +13,7 @@ interface ChatPanelProps {
   onAddThread: (ruleId: string, title: string) => void;
   onAddComment: (threadId: string, text: string, author: 'QC' | 'SM') => void;
   onToggleThread: (threadId: string) => void;
+  onCloseThread: (threadId: string) => void;
   onActionStatusChange: (threadId: string, newActionStatus: string) => void;
   onPriorityChange: (threadId: string, newPriority: string) => void;
   position: { x: number; y: number };
@@ -30,6 +31,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   onAddThread,
   onAddComment,
   onToggleThread,
+  onCloseThread,
   onActionStatusChange,
   onPriorityChange,
   position,
@@ -71,12 +73,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     setClosureComment('');
     
     if (thread.status === 'Closed') {
-      // Thread is already closed, show warning that it cannot be reopened
-      setCloseThreadDialog({ isOpen: true, thread });
+      // Thread is closed, reopen it directly
+      onToggleThread(thread.id);
     } else {
       // Thread is open, check if it can be closed
-      if (thread.actionStatus === 'Verified' || thread.actionStatus === 'Skipped') {
-        // Can close the thread
+      if (thread.actionStatus === 'No Error' || thread.actionStatus === 'Error') {
+        // Can close the thread, show dialog
         setCloseThreadDialog({ isOpen: true, thread });
       } else {
         // Cannot close thread, show warning
@@ -93,7 +95,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       }
       
       // Close the thread
-      onToggleThread(closeThreadDialog.thread.id);
+      onCloseThread(closeThreadDialog.thread.id);
       setCloseThreadDialog({ isOpen: false, thread: null });
       setClosureComment('');
     }
@@ -207,8 +209,8 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     'In Progress', 
     'On Hold',
     'Completed',
-    'Verified',
-    'Skipped'
+    'No Error',
+    'Error'
   ];
 
   const priorityOptions = [
@@ -367,9 +369,10 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   // Ensure threads start collapsed for business rule context
   useEffect(() => {
     if (context === 'businessRule' && threads.length > 0) {
+      // Only reset expanded threads when context changes, not when threads are updated
       setExpandedThreads(new Set());
     }
-  }, [context, threads]);
+  }, [context]);
 
   if (!isOpen || !rule) return null;
 
@@ -481,21 +484,21 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                 animate={{ opacity: 1, y: 0 }}
                 className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
               >
-                {/* Thread Header - Non-clickable in thread context */}
+                {/* Thread Header - Simplified */}
                 <div className="p-3 bg-gray-50 dark:bg-gray-700">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <h4 className="font-medium text-gray-900 dark:text-gray-100">
-                        {thread.title}
-                      </h4>
                       {getStatusBadge(thread.status)}
-                    </div>
-                    <div className="flex items-center space-x-2">
+                      
+                      {/* Action Status */}
                       <select
                         value={thread.actionStatus}
                         onChange={(e) => onActionStatusChange(thread.id, e.target.value)}
+                        disabled={thread.status === 'Closed'}
                         className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
-                          thread.actionStatus === 'Action Required' 
+                          thread.status === 'Closed'
+                            ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed opacity-60'
+                            : thread.actionStatus === 'Action Required' 
                             ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                             : thread.actionStatus === 'In Progress'
                             ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
@@ -503,13 +506,13 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
                             : thread.actionStatus === 'On Hold'
                             ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                            : thread.actionStatus === 'Verified'
-                            ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
-                            : thread.actionStatus === 'Skipped'
-                            ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                            : thread.actionStatus === 'No Error'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : thread.actionStatus === 'Error'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                         }`}
-                        title="Change action status"
+                        title={thread.status === 'Closed' ? 'Cannot change status - thread is closed' : 'Change action status'}
                       >
                         {actionStatusOptions.map((status) => (
                           <option key={status} value={status}>
@@ -517,11 +520,16 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                           </option>
                         ))}
                       </select>
+                      
+                      {/* Priority */}
                       <select
                         value={thread.priority}
                         onChange={(e) => onPriorityChange(thread.id, e.target.value)}
+                        disabled={thread.status === 'Closed'}
                         className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
-                          thread.priority === 'P1' 
+                          thread.status === 'Closed'
+                            ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed opacity-60'
+                            : thread.priority === 'P1' 
                             ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                             : thread.priority === 'P2'
                             ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
@@ -529,7 +537,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                         }`}
-                        title="Change priority"
+                        title={thread.status === 'Closed' ? 'Cannot change priority - thread is closed' : 'Change priority'}
                       >
                         {priorityOptions.map((priority) => (
                           <option key={priority.value} value={priority.value}>
@@ -537,24 +545,29 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                           </option>
                         ))}
                       </select>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {thread.comments.length} comments
-                      </span>
-                      <Clock className="h-4 w-4 text-gray-400" />
+                    </div>
+                    
+                    {/* Toggle Switch */}
+                    <div className="flex items-center">
                       <button
                         onClick={() => handleCloseThreadClick(thread)}
-                        className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 ${
+                        className={`relative inline-flex h-6 w-16 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
                           thread.status === 'Open' 
-                            ? 'text-orange-600 hover:text-orange-700 dark:text-orange-400' 
-                            : 'text-green-600 hover:text-green-700 dark:text-green-400'
+                            ? 'bg-green-500 focus:ring-green-500' 
+                            : 'bg-gray-400 focus:ring-gray-400'
                         }`}
                         title={thread.status === 'Open' ? 'Close thread' : 'Reopen thread'}
                       >
-                        {thread.status === 'Open' ? (
-                          <Lock className="h-4 w-4" />
-                        ) : (
-                          <Unlock className="h-4 w-4" />
-                        )}
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform duration-200 ${
+                            thread.status === 'Open' ? 'translate-x-1' : 'translate-x-11'
+                          }`}
+                        />
+                        <span className={`absolute text-xs font-medium text-white transition-opacity duration-200 ${
+                          thread.status === 'Open' ? 'right-1 opacity-100' : 'left-1 opacity-100'
+                        }`}>
+                          {thread.status === 'Open' ? 'Open' : 'Closed'}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -680,29 +693,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         {thread.title}
                       </h4>
                       
-                      {/* Urgency and Status Info - Always visible */}
+                      {/* Status and Priority Info - Simplified */}
                       <div className="flex items-center space-x-2 flex-shrink-0">
-                      {getStatusBadge(thread.status)}
-                        
-                        {/* Urgency Badge */}
-                        {(() => {
-                          const urgencyInfo = getThreadUrgencyInfo(thread);
-                          return (
-                            <span className={getUrgencyBadge(urgencyInfo.urgencyLevel, urgencyInfo.overdueDays)}>
-                              {urgencyInfo.isOverdue ? (
-                                <>
-                                  <AlertTriangle className="h-3 w-3 mr-1" />
-                                  {urgencyInfo.overdueDays}d overdue
-                                </>
-                              ) : (
-                                <>
-                                  <Calendar className="h-3 w-3 mr-1" />
-                                  {urgencyInfo.daysSinceUpdate}d ago
-                                </>
-                              )}
-                            </span>
-                          );
-                        })()}
+                        {getStatusBadge(thread.status)}
                         
                         {/* Priority Badge */}
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -714,47 +707,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         }`}>
                           {thread.priority}
                         </span>
-                        
-                        {/* Comment Count */}
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {thread.comments.length} comments
-                        </span>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2 flex-shrink-0">
-                      <select
-                        value={thread.actionStatus}
-                        onChange={(e) => onActionStatusChange(thread.id, e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
-                        className="text-xs border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-1 focus:ring-primary-500 focus:border-transparent"
-                        title="Change action status"
-                      >
-                        {actionStatusOptions.map((status) => (
-                          <option key={status} value={status}>
-                            {status}
-                          </option>
-                        ))}
-                      </select>
-                      <Clock className="h-4 w-4 text-gray-400" />
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleThread(thread.id);
-                        }}
-                        className={`p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors duration-200 ${
-                          thread.status === 'Open' 
-                            ? 'text-orange-600 hover:text-orange-700 dark:text-orange-400' 
-                            : 'text-green-600 hover:text-green-700 dark:text-green-400'
-                        }`}
-                        title={thread.status === 'Open' ? 'Close thread' : 'Reopen thread'}
-                      >
-                        {thread.status === 'Open' ? (
-                          <Lock className="h-4 w-4" />
-                        ) : (
-                          <Unlock className="h-4 w-4" />
-                        )}
-                      </button>
                     </div>
                   </div>
                 </div>
@@ -969,7 +922,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {closeThreadDialog.thread.actionStatus === 'Verified' || closeThreadDialog.thread.actionStatus === 'Skipped' ? (
+                        {closeThreadDialog.thread.actionStatus === 'No Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
                           <div className="space-y-2">
                             <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
                               <Lock className="h-5 w-5" />
@@ -1007,11 +960,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             </div>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
                               This thread cannot be closed because its status is <strong>{closeThreadDialog.thread.actionStatus}</strong>.
-                              Please change the status to either <strong>Verified</strong> or <strong>Skipped</strong> before closing.
+                              Please change the status to either <strong>No Error</strong> or <strong>Error</strong> before closing.
                             </p>
                             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                               <p className="text-xs text-amber-800 dark:text-amber-200">
-                                <strong>Note:</strong> Only threads with "Verified" or "Skipped" status can be closed.
+                                <strong>Note:</strong> Only threads with "No Error" or "Error" status can be closed.
                               </p>
                             </div>
                           </div>
@@ -1031,7 +984,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     >
                       Understood
                     </button>
-                  ) : closeThreadDialog.thread.actionStatus === 'Verified' || closeThreadDialog.thread.actionStatus === 'Skipped' ? (
+                  ) : closeThreadDialog.thread.actionStatus === 'No Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
                     <>
                       <button
                         type="button"
