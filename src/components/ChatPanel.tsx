@@ -10,7 +10,7 @@ interface ChatPanelProps {
   rule: BusinessRule | null;
   threads: Thread[];
   context: 'businessRule' | 'thread';
-  onAddThread: (ruleId: string, title: string) => void;
+  onAddThread: (ruleId: string, title: string, firstComment?: string) => void;
   onAddComment: (threadId: string, text: string, author: 'QC' | 'SM') => void;
   onToggleThread: (threadId: string) => void;
   onCloseThread: (threadId: string) => void;
@@ -77,7 +77,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
       onToggleThread(thread.id);
     } else {
       // Thread is open, check if it can be closed
-      if (thread.actionStatus === 'No Error' || thread.actionStatus === 'Error') {
+      if (thread.actionStatus === 'Non-Error' || thread.actionStatus === 'Error') {
         // Can close the thread, show dialog
         setCloseThreadDialog({ isOpen: true, thread });
       } else {
@@ -150,23 +150,14 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     let classes = '';
     
     switch (actionStatus) {
-      case 'Action Required':
+      case 'Error':
         classes = `${baseClasses} bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200`;
         break;
-      case 'In Progress':
-        classes = `${baseClasses} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`;
-        break;
-      case 'On Hold':
-        classes = `${baseClasses} bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200`;
-        break;
-      case 'Completed':
+      case 'Non-Error':
         classes = `${baseClasses} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`;
         break;
-      case 'Verified':
-        classes = `${baseClasses} bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200`;
-        break;
-      case 'Skipped':
-        classes = `${baseClasses} bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200`;
+      case 'Mere Observation':
+        classes = `${baseClasses} bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200`;
         break;
       default:
         classes = `${baseClasses} bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200`;
@@ -205,12 +196,9 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
   };
 
   const actionStatusOptions = [
-    'Action Required',
-    'In Progress', 
-    'On Hold',
-    'Completed',
-    'No Error',
-    'Error'
+    'Error',
+    'Non-Error',
+    'Mere Observation'
   ];
 
   const priorityOptions = [
@@ -241,7 +229,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
     }
     
     // Adjust urgency based on action status
-    if (thread.actionStatus === 'Action Required' && overdueDays > 0) {
+    if (thread.actionStatus === 'Non-Error' && overdueDays > 0) {
       urgencyLevel = 'critical';
     }
     
@@ -498,18 +486,12 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                         className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
                           thread.status === 'Closed'
                             ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed opacity-60'
-                            : thread.actionStatus === 'Action Required' 
+                            : thread.actionStatus === 'Error' 
                             ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                            : thread.actionStatus === 'In Progress'
+                            : thread.actionStatus === 'Non-Error'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                            : thread.actionStatus === 'Mere Observation'
                             ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                            : thread.actionStatus === 'Completed'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : thread.actionStatus === 'On Hold'
-                            ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                            : thread.actionStatus === 'No Error'
-                            ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                            : thread.actionStatus === 'Error'
-                            ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                             : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                         }`}
                         title={thread.status === 'Closed' ? 'Cannot change status - thread is closed' : 'Change action status'}
@@ -922,7 +904,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {closeThreadDialog.thread.actionStatus === 'No Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
+                        {closeThreadDialog.thread.actionStatus === 'Non-Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
                           <div className="space-y-2">
                             <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
                               <Lock className="h-5 w-5" />
@@ -960,11 +942,11 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                             </div>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
                               This thread cannot be closed because its status is <strong>{closeThreadDialog.thread.actionStatus}</strong>.
-                              Please change the status to either <strong>No Error</strong> or <strong>Error</strong> before closing.
+                              Please change the status to either <strong>Non-Error</strong> or <strong>Error</strong> before closing.
                             </p>
                             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                               <p className="text-xs text-amber-800 dark:text-amber-200">
-                                <strong>Note:</strong> Only threads with "No Error" or "Error" status can be closed.
+                                <strong>Note:</strong> Only threads with "Non-Error" or "Error" status can be closed.
                               </p>
                             </div>
                           </div>
@@ -984,7 +966,7 @@ const ChatPanel: React.FC<ChatPanelProps> = ({
                     >
                       Understood
                     </button>
-                  ) : closeThreadDialog.thread.actionStatus === 'No Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
+                  ) : closeThreadDialog.thread.actionStatus === 'Non-Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
                     <>
                       <button
                         type="button"

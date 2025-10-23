@@ -9,6 +9,11 @@ export interface BusinessRule {
   businessRule: string;
   createdAt: string;
   updatedAt: string;
+  severity?: 'Critical' | 'Major' | 'Significant';
+  isNA?: boolean;
+  naReason?: string;
+  customStatusValues?: string[];
+  hasPassedNoComments?: boolean;
 }
 
 export interface Comment {
@@ -25,7 +30,7 @@ export interface Thread {
   title: string;
   ruleId: string;
   status: 'Open' | 'Closed';
-  actionStatus: 'Action Required' | 'In Progress' | 'On Hold' | 'Completed' | 'Error' | 'No Error';
+  actionStatus: 'Error' | 'Non-Error' | 'Mere Observation';
   priority: 'P1' | 'P2' | 'P3';
   comments: Comment[];
   dueDate: string; // SLA due date
@@ -39,6 +44,8 @@ export interface FilterState {
   threadStatus: string[];
   businessRule: string[];
   threadTitle: string[];
+  isNA?: boolean;
+  naReason?: string;
 }
 
 export interface ChatPanelState {

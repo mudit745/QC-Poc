@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ChevronDown, ChevronRight, MessageCircle, Plus, X, AlertTriangle, Calendar, Lock } from 'lucide-react';
+import { ChevronDown, ChevronRight, Plus, X, AlertTriangle, Calendar, Lock } from 'lucide-react';
 import { BusinessRule, Thread, Comment } from '../types';
 import AddThreadModal from './AddThreadModal';
+import ConfigureStatusModal from './ConfigureStatusModal';
 
 interface DataTableProps {
   rules: BusinessRule[];
@@ -15,12 +16,18 @@ interface DataTableProps {
   onOpenChat: (ruleId: string, threadId?: string) => void;
   onActionStatusChange: (threadId: string, status: string) => void;
   onPriorityChange: (threadId: string, priority: string) => void;
-  onAddThread: (ruleId: string, title: string) => void;
+  onAddThread: (ruleId: string, title: string, firstComment?: string) => void;
+  onAddComment: (threadId: string, text: string, author: 'QC' | 'SM') => void;
+  onRuleStatusChange: (ruleId: string, status: string) => void;
+  onRuleSeverityChange: (ruleId: string, severity: string) => void;
   actionStatusOptions: string[];
   priorityOptions: { value: string; label: string }[];
   threadStatusFilter: string[];
   threadTitleFilter: string[];
   businessRuleFilter: string[];
+  isNA: boolean;
+  customStatusValues: string[];
+  onAddCustomStatus: (status: string) => void;
 }
 
 const DataTable: React.FC<DataTableProps> = ({
@@ -35,20 +42,32 @@ const DataTable: React.FC<DataTableProps> = ({
   onActionStatusChange,
   onPriorityChange,
   onAddThread,
+  onAddComment,
+  onRuleStatusChange,
+  onRuleSeverityChange,
   actionStatusOptions,
   priorityOptions,
   threadStatusFilter,
   threadTitleFilter,
-  businessRuleFilter
+  businessRuleFilter,
+  isNA,
+  customStatusValues,
+  onAddCustomStatus
 }) => {
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedRuleId, setSelectedRuleId] = useState<string>('');
   const [selectedRuleDescription, setSelectedRuleDescription] = useState<string>('');
+  const [configureModalOpen, setConfigureModalOpen] = useState(false);
+  const [selectedRuleForConfig, setSelectedRuleForConfig] = useState<string>('');
   const [closeThreadDialog, setCloseThreadDialog] = useState<{
     isOpen: boolean;
     thread: Thread | null;
   }>({ isOpen: false, thread: null });
+  
+  // Ref for comments container to enable auto-scroll to bottom
+  const commentsRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
   const [closureComment, setClosureComment] = useState('');
+  const [commentInputs, setCommentInputs] = useState<{ [key: string]: string }>({});
 
   const groupedRules = useMemo(() => {
     const groups: { [key: string]: BusinessRule[] } = {};
@@ -119,17 +138,14 @@ const DataTable: React.FC<DataTableProps> = ({
     let classes = '';
     
     switch (actionStatus) {
-      case 'Pending':
-        classes = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'Error':
+        classes = 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
         break;
-      case 'In Progress':
-        classes = 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
-        break;
-      case 'Completed':
+      case 'Non-Error':
         classes = 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
         break;
-      case 'On Hold':
-        classes = 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+      case 'Mere Observation':
+        classes = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
         break;
       default:
         classes = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
@@ -185,7 +201,7 @@ const DataTable: React.FC<DataTableProps> = ({
     }
     
     // Escalate urgency based on action status
-    if (thread.actionStatus === 'Action Required' && overdueDays > 0) {
+    if (thread.actionStatus === 'Error' && overdueDays > 0) {
       urgencyLevel = 'critical';
     }
     
@@ -240,8 +256,8 @@ const DataTable: React.FC<DataTableProps> = ({
     setModalOpen(true);
   };
 
-  const handleModalConfirm = (title: string) => {
-    onAddThread(selectedRuleId, title);
+  const handleModalConfirm = (title: string, firstComment: string) => {
+    onAddThread(selectedRuleId, title, firstComment);
     setModalOpen(false);
     setSelectedRuleId('');
     setSelectedRuleDescription('');
@@ -262,7 +278,7 @@ const DataTable: React.FC<DataTableProps> = ({
       setCloseThreadDialog({ isOpen: true, thread });
     } else {
       // Thread is open, check if it can be closed
-      if (thread.actionStatus === 'No Error' || thread.actionStatus === 'Error') {
+      if (thread.actionStatus === 'Non-Error' || thread.actionStatus === 'Error') {
         // Can close the thread
         setCloseThreadDialog({ isOpen: true, thread });
       } else {
@@ -286,6 +302,39 @@ const DataTable: React.FC<DataTableProps> = ({
     setClosureComment('');
   };
 
+  // Helper functions for comment input
+  const handleCommentInputChange = (threadId: string, value: string) => {
+    setCommentInputs(prev => ({
+      ...prev,
+      [threadId]: value
+    }));
+  };
+
+  const handleAddCommentClick = (threadId: string, author: 'QC' | 'SM') => {
+    const commentText = commentInputs[threadId]?.trim();
+    if (commentText) {
+      onAddComment(threadId, commentText, author);
+      setCommentInputs(prev => ({
+        ...prev,
+        [threadId]: ''
+      }));
+    }
+  };
+
+  // Auto-scroll to bottom when a thread is expanded
+  useEffect(() => {
+    // Find all expanded threads and scroll their comments to bottom
+    Object.keys(commentsRefs.current).forEach(threadId => {
+      const commentsContainer = commentsRefs.current[threadId];
+      if (commentsContainer) {
+        // Small delay to ensure the content is rendered
+        setTimeout(() => {
+          commentsContainer.scrollTop = commentsContainer.scrollHeight;
+        }, 100);
+      }
+    });
+  }, [expandedThreads]); // Trigger when expandedThreads changes
+
   return (
     <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 rounded-lg">
       <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
@@ -295,7 +344,10 @@ const DataTable: React.FC<DataTableProps> = ({
               Rule No
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-              Description
+              Rule Description
+            </th>
+            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              Issue Severity
             </th>
             <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
               Status
@@ -313,12 +365,17 @@ const DataTable: React.FC<DataTableProps> = ({
                 
                 // Apply thread status filter
                 if (!threadStatusFilter.includes('All')) {
-                  ruleThreads = ruleThreads.filter(thread => threadStatusFilter.includes(thread.status));
+                  ruleThreads = ruleThreads.filter(thread => threadStatusFilter.includes(thread.actionStatus));
                 }
                 
                 // Apply thread title filter (cascading - only if business rule is selected)
                 if (!threadTitleFilter.includes('All')) {
                   ruleThreads = ruleThreads.filter(thread => threadTitleFilter.includes(thread.title));
+                }
+                
+                // Hide rule if it has no findings matching the filters
+                if (ruleThreads.length === 0) {
+                  return null;
                 }
                 
                 // Sort threads: Open threads first, then Closed threads
@@ -338,28 +395,84 @@ const DataTable: React.FC<DataTableProps> = ({
                         {rule.ruleNo}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                        <div className="font-medium">{rule.description}</div>
+                        <div className="flex items-center space-x-2">
+                          <div className="font-medium">{rule.description}</div>
+                          {rule.hasPassedNoComments && (
+                            <div className="flex items-center space-x-1 text-amber-600 dark:text-amber-400" title="Rule passed but has no comments">
+                              <AlertTriangle className="h-4 w-4" />
+                              <span className="text-xs font-medium">No Comments</span>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={getStatusBadge(rule.status)}>
-                          {rule.status}
-                        </span>
+                        <select
+                          value={rule.severity || 'Critical'}
+                          onChange={(e) => onRuleSeverityChange(rule.id, e.target.value)}
+                          disabled={isNA}
+                          className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
+                            isNA ? 'opacity-50 cursor-not-allowed' : ''
+                          } ${
+                            rule.severity === 'Critical' 
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                              : rule.severity === 'Major'
+                              ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
+                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                          }`}
+                        >
+                          <option value="Critical">Critical</option>
+                          <option value="Major">Major</option>
+                          <option value="Significant">Significant</option>
+                        </select>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <select
+                          value={rule.status}
+                          onChange={(e) => {
+                            if (e.target.value === 'Configure') {
+                              setSelectedRuleForConfig(rule.id);
+                              setConfigureModalOpen(true);
+                            } else {
+                              onRuleStatusChange(rule.id, e.target.value);
+                            }
+                          }}
+                          disabled={isNA}
+                          className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
+                            isNA ? 'opacity-50 cursor-not-allowed' : ''
+                          } ${
+                            rule.status === 'Pass' 
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+                              : rule.status === 'Fail'
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                              : rule.status === 'N/A'
+                              ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
+                              : customStatusValues.includes(rule.status)
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                              : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+                          }`}
+                        >
+                          <option value="Pass">Pass</option>
+                          <option value="Fail">Fail</option>
+                          <option value="N/A">N/A</option>
+                          {customStatusValues.map((status) => (
+                            <option key={status} value={status}>{status}</option>
+                          ))}
+                          <option value="Configure">Configure</option>
+                        </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center justify-center space-x-2">
                           <button
-                            onClick={() => onOpenChat(rule.id, undefined)}
-                            className="p-2 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 rounded-md transition-colors duration-200"
-                            title="Open business rule chat"
-                          >
-                            <MessageCircle className="h-4 w-4" />
-                          </button>
-                          <button
                             onClick={() => handleAddThread(rule.id, rule.description)}
-                            className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors duration-200"
+                            disabled={isNA}
+                            className={`inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white transition-colors duration-200 ${
+                              isNA 
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                            }`}
                           >
                             <Plus className="h-3 w-3 mr-1" />
-                            New thread
+                            New Finding
                           </button>
                           <button
                             onClick={() => onToggleRow(rule.id)}
@@ -384,13 +497,13 @@ const DataTable: React.FC<DataTableProps> = ({
                         exit={{ opacity: 0, height: 0 }}
                         transition={{ duration: 0.2 }}
                       >
-                        <td colSpan={4} className="px-0">
-                          <div className="bg-white dark:bg-gray-800">
+                        <td colSpan={5} className="px-0">
+                          <div className="bg-white dark:bg-gray-800 w-full">
                             {ruleThreads.length > 0 && (
-                              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700">
+                              <div className="px-6 py-4 bg-gray-50 dark:bg-gray-700 w-full">
                                 <div className="flex items-center justify-between mb-4">
                                   <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                    Discussion Threads ({ruleThreads.length})
+                                    Findings/Comments ({ruleThreads.length})
                                   </h4>
                                   {/* Master Expand/Collapse All Button */}
                                   <button
@@ -441,7 +554,7 @@ const DataTable: React.FC<DataTableProps> = ({
                                         className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-600 shadow-sm overflow-hidden"
                                       >
                                         {/* Thread Header - Non-clickable, with dedicated expand/collapse button */}
-                                        <div className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200">
+                                        <div className="flex items-center justify-between p-4 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors duration-200 w-full">
                                           <div className="flex items-center space-x-3 flex-1 min-w-0">
                                             {/* Dedicated Expand/Collapse Button */}
                                             <button
@@ -463,35 +576,13 @@ const DataTable: React.FC<DataTableProps> = ({
                                               {thread.title}
                                             </h5>
                                             
-                                            {/* Enhanced Thread Information - Always visible */}
-                                            <div className="flex items-center space-x-2 flex-shrink-0">
-                                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                                thread.status === 'Open' 
-                                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                              }`}>
-                                                {thread.status}
-                                              </span>
-                                              
-                                              
-                                              {/* Priority Badge */}
-                                              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                                thread.priority === 'P1' 
-                                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                                  : thread.priority === 'P2'
-                                                  ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                                  : 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                              }`}>
-                                                {thread.priority}
-                                              </span>
-                                              
-                                              
-                                              {/* Thread Creation Date */}
-                                              <span className="text-xs text-gray-500 dark:text-gray-400">
-                                                Opened: {formatDate(thread.createdAt)}
-                                              </span>
-                                              
-                                            </div>
+                                            {/* Thread Creation Date - Left side */}
+                                            <span className="text-xs text-gray-500 dark:text-gray-400 flex-shrink-0 ml-4">
+                                              Opened: {formatDate(thread.createdAt)}
+                                            </span>
+                                            
+                                            {/* Spacer to push toggle to the right */}
+                                            <div className="flex-1"></div>
                                           </div>
                                           
                                           {/* Action Buttons - Right Side */}
@@ -520,13 +611,6 @@ const DataTable: React.FC<DataTableProps> = ({
                                               </button>
                                             </div>
                                             
-                                            <button
-                                              onClick={() => onOpenChat(rule.id, thread.id)}
-                                              className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200"
-                                              title="Open thread discussion"
-                                            >
-                                              <MessageCircle className="h-4 w-4 text-primary-600 dark:text-primary-400" />
-                                            </button>
                                           </div>
                                         </div>
                                         
@@ -547,22 +631,16 @@ const DataTable: React.FC<DataTableProps> = ({
                                               <select
                                                 value={thread.actionStatus}
                                                 onChange={(e) => onActionStatusChange(thread.id, e.target.value)}
-                                                disabled={thread.status === 'Closed'}
+                                                disabled={thread.status === 'Closed' || isNA}
                                                 className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
-                                                  thread.status === 'Closed'
+                                                  thread.status === 'Closed' || isNA
                                                     ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed opacity-60'
-                                                    : thread.actionStatus === 'Action Required' 
+                                                    : thread.actionStatus === 'Error' 
                                                     ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                                    : thread.actionStatus === 'In Progress'
-                                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                                    : thread.actionStatus === 'Completed'
+                                                    : thread.actionStatus === 'Non-Error'
                                                     ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                    : thread.actionStatus === 'On Hold'
-                                                    ? 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200'
-                                                  : thread.actionStatus === 'No Error'
-                                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                                                  : thread.actionStatus === 'Error'
-                                                  ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                                    : thread.actionStatus === 'Mere Observation'
+                                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
                                                     : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
                                                 }`}
                                                 title={thread.status === 'Closed' ? 'Cannot change status - thread is closed' : 'Change action status'}
@@ -573,70 +651,111 @@ const DataTable: React.FC<DataTableProps> = ({
                                                   </option>
                                                 ))}
                                               </select>
-                                              <select
-                                                value={thread.priority}
-                                                onChange={(e) => onPriorityChange(thread.id, e.target.value)}
-                                                disabled={thread.status === 'Closed'}
-                                                className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
-                                                  thread.status === 'Closed'
-                                                    ? 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 cursor-not-allowed opacity-60'
-                                                    : thread.priority === 'P1' 
-                                                    ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-                                                    : thread.priority === 'P2'
-                                                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'
-                                                    : thread.priority === 'P3'
-                                                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-                                                    : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-                                                }`}
-                                                title={thread.status === 'Closed' ? 'Cannot change priority - thread is closed' : 'Change priority'}
-                                              >
-                                                {priorityOptions.map((priority) => (
-                                                  <option key={priority.value} value={priority.value}>
-                                                    {priority.label}
-                                                  </option>
-                                                ))}
-                                              </select>
                                             </div>
                                             
-                                            {/* Latest Comments - Aligned with column headers */}
-                                            <div className="grid grid-cols-2 gap-4 mt-3">
-                                              {/* QC Comment Column */}
-                                              <div className="text-xs">
-                                                <div className="font-medium text-blue-600 dark:text-blue-400 mb-1">QC Comment:</div>
-                                                {latestQCComment ? (
-                                                  <div className="p-2 bg-blue-50 dark:bg-blue-900/20 rounded border border-blue-200 dark:border-blue-800">
-                                                    <div className="text-gray-700 dark:text-gray-300 mb-1">
-                                                      {latestQCComment.text}
-                                                    </div>
-                                                    <div className="text-gray-500 dark:text-gray-400 text-xs">
-                                                      {formatDate(latestQCComment.timestamp)}
-                                                    </div>
-                                                  </div>
-                                                ) : (
-                                                  <div className="p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400">
-                                                    No QC comments yet
-                                                  </div>
-                                                )}
-                                              </div>
+                                            {/* Chat Interface - Direct */}
+                                            <div className="mt-3">
+                                              <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">Comments:</div>
                                               
-                                              {/* SM Comment Column */}
-                                              <div className="text-xs">
-                                                <div className="font-medium text-green-600 dark:text-green-400 mb-1">SM Comment:</div>
-                                                {latestSMComment ? (
-                                                  <div className="p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
-                                                    <div className="text-gray-700 dark:text-gray-300 mb-1">
-                                                      {latestSMComment.text}
-                                                    </div>
-                                                    <div className="text-gray-500 dark:text-gray-400 text-xs">
-                                                      {formatDate(latestSMComment.timestamp)}
-                                                    </div>
+                                              {/* Comments Display */}
+                                              <div 
+                                                ref={(el) => {
+                                                  if (el) {
+                                                    commentsRefs.current[thread.id] = el;
+                                                  }
+                                                }}
+                                                className="space-y-3 max-h-60 overflow-y-auto mb-3"
+                                              >
+                                                {thread.comments.length === 0 ? (
+                                                  <div className="text-center py-4 text-gray-500 dark:text-gray-400 text-xs">
+                                                    No comments yet
                                                   </div>
                                                 ) : (
-                                                  <div className="p-2 bg-gray-50 dark:bg-gray-700 rounded border border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400">
-                                                    No SM comments yet
-                                                  </div>
+                                                  thread.comments.map((comment) => (
+                                                    <div
+                                                      key={comment.id}
+                                                      className={`flex ${comment.author === 'QC' ? 'justify-start' : 'justify-end'} mb-2`}
+                                                    >
+                                                      <div className={`flex max-w-[80%] ${comment.author === 'QC' ? 'flex-row space-x-2' : 'flex-row-reverse space-x-reverse space-x-2'}`}>
+                                                        {/* Avatar */}
+                                                        <div className="flex-shrink-0">
+                                                          <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
+                                                            comment.author === 'QC' 
+                                                              ? 'bg-blue-500 text-white'
+                                                              : 'bg-green-500 text-white'
+                                                          }`}>
+                                                            {comment.author}
+                                                          </div>
+                                                        </div>
+                                                        
+                                                        {/* Message Content */}
+                                                        <div className="flex-1 min-w-0">
+                                                          <div className={`rounded-lg px-3 py-2 text-xs shadow-sm max-w-full break-words ${
+                                                            comment.author === 'QC' 
+                                                              ? 'bg-blue-500 text-white rounded-bl-md'
+                                                              : 'bg-green-500 text-white rounded-br-md'
+                                                          }`}>
+                                                            <p className="leading-relaxed whitespace-pre-wrap break-words">
+                                                              {comment.text}
+                                                            </p>
+                                                          </div>
+                                                          <div className={`text-xs text-gray-500 dark:text-gray-400 mt-1 ${comment.author === 'QC' ? 'text-left' : 'text-right'}`}>
+                                                            {formatDate(comment.timestamp)}
+                                                          </div>
+                                                        </div>
+                                                      </div>
+                                                    </div>
+                                                  ))
                                                 )}
                                               </div>
+
+                                              {/* Add Comment Form - Only for open threads */}
+                                              {thread.status === 'Open' && (
+                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+                                                  <div className="flex items-center space-x-2">
+                                                    <input
+                                                      type="text"
+                                                      placeholder="Type your message..."
+                                                      value={commentInputs[thread.id] || ''}
+                                                      onChange={(e) => handleCommentInputChange(thread.id, e.target.value)}
+                                                      className="flex-1 min-w-0 px-3 py-2 text-xs border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent resize-none break-words"
+                                                      onKeyPress={(e) => {
+                                                        if (e.key === 'Enter') {
+                                                          const commentText = commentInputs[thread.id]?.trim();
+                                                          if (commentText) {
+                                                            // Default to QC when pressing Enter
+                                                            handleAddCommentClick(thread.id, 'QC');
+                                                          }
+                                                        }
+                                                      }}
+                                                    />
+                                                    <div className="flex space-x-1">
+                                                      <button
+                                                        onClick={() => handleAddCommentClick(thread.id, 'QC')}
+                                                        className="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors duration-200 font-medium"
+                                                      >
+                                                        QC
+                                                      </button>
+                                                      <button
+                                                        onClick={() => handleAddCommentClick(thread.id, 'SM')}
+                                                        className="px-2 py-1 text-xs bg-green-500 text-white rounded hover:bg-green-600 transition-colors duration-200 font-medium"
+                                                      >
+                                                        SM
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {/* Closed Thread Message */}
+                                              {thread.status === 'Closed' && (
+                                                <div className="border-t border-gray-200 dark:border-gray-700 pt-3">
+                                                  <div className="flex items-center space-x-2 text-xs text-gray-500 dark:text-gray-400">
+                                                    <Lock className="h-3 w-3" />
+                                                    <span>This thread is closed. No new comments can be added.</span>
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           </div>
                                           
@@ -735,7 +854,7 @@ const DataTable: React.FC<DataTableProps> = ({
                       </div>
                     ) : (
                       <div className="space-y-3">
-                        {closeThreadDialog.thread.actionStatus === 'No Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
+                        {closeThreadDialog.thread.actionStatus === 'Non-Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
                           <div className="space-y-2">
                             <div className="flex items-center space-x-2 text-green-600 dark:text-green-400">
                               <Lock className="h-5 w-5" />
@@ -773,11 +892,11 @@ const DataTable: React.FC<DataTableProps> = ({
                             </div>
                             <p className="text-sm text-gray-600 dark:text-gray-400">
                               This thread cannot be closed because its status is <strong>{closeThreadDialog.thread.actionStatus}</strong>.
-                              Please change the status to either <strong>Verified</strong> or <strong>Skipped</strong> before closing.
+                              Please change the status to either <strong>Non-Error</strong> or <strong>Error</strong> before closing.
                             </p>
                             <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
                               <p className="text-xs text-amber-800 dark:text-amber-200">
-                                <strong>Note:</strong> Only threads with "Verified" or "Skipped" status can be closed.
+                                <strong>Note:</strong> Only threads with "Non-Error" or "Error" status can be closed.
                               </p>
                             </div>
                           </div>
@@ -797,7 +916,7 @@ const DataTable: React.FC<DataTableProps> = ({
                     >
                       Understood
                     </button>
-                  ) : closeThreadDialog.thread.actionStatus === 'No Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
+                  ) : closeThreadDialog.thread.actionStatus === 'Non-Error' || closeThreadDialog.thread.actionStatus === 'Error' ? (
                     <>
                       <button
                         type="button"
@@ -829,6 +948,18 @@ const DataTable: React.FC<DataTableProps> = ({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Configure Status Modal */}
+      <ConfigureStatusModal
+        isOpen={configureModalOpen}
+        onClose={() => setConfigureModalOpen(false)}
+        onAddStatus={(newStatus: string) => {
+          // Add the new status to custom status values
+          onAddCustomStatus(newStatus);
+          setConfigureModalOpen(false);
+        }}
+        existingStatuses={['All', 'Pass', 'Fail', 'N/A', ...customStatusValues]}
+      />
     </div>
   );
 };

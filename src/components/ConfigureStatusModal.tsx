@@ -1,27 +1,27 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Plus } from 'lucide-react';
+import { X, Plus, Settings } from 'lucide-react';
 
-interface AddThreadModalProps {
+interface ConfigureStatusModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (title: string, firstComment: string) => void;
-  ruleDescription?: string;
+  onAddStatus: (newStatus: string) => void;
+  existingStatuses: string[];
 }
 
-const AddThreadModal: React.FC<AddThreadModalProps> = ({
+const ConfigureStatusModal: React.FC<ConfigureStatusModalProps> = ({
   isOpen,
   onClose,
-  onConfirm,
-  ruleDescription
+  onAddStatus,
+  existingStatuses
 }) => {
-  const [firstComment, setFirstComment] = useState('');
+  const [newStatus, setNewStatus] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setFirstComment('');
+      setNewStatus('');
       setIsSubmitting(false);
       // Focus the input when modal opens
       const timer = setTimeout(() => {
@@ -35,17 +35,12 @@ const AddThreadModal: React.FC<AddThreadModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (firstComment.trim()) {
+    if (newStatus.trim() && !existingStatuses.includes(newStatus.trim())) {
       setIsSubmitting(true);
-      
-      // Generate title from first comment (first 10 words or all words if less than 10)
-      const words = firstComment.trim().split(' ');
-      const title = words.length > 10 ? words.slice(0, 10).join(' ') + '...' : words.join(' ');
-      
-      onConfirm(title, firstComment.trim());
+      onAddStatus(newStatus.trim());
       // Reset form after a brief delay
       setTimeout(() => {
-        setFirstComment('');
+        setNewStatus('');
         setIsSubmitting(false);
         onClose();
       }, 100);
@@ -58,9 +53,11 @@ const AddThreadModal: React.FC<AddThreadModalProps> = ({
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setFirstComment(e.target.value);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewStatus(e.target.value);
   };
+
+  const isDuplicate = existingStatuses.includes(newStatus.trim());
 
   return (
     <AnimatePresence>
@@ -89,15 +86,15 @@ const AddThreadModal: React.FC<AddThreadModalProps> = ({
               <div className="bg-white dark:bg-gray-800 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-3">
-                    <div className="flex items-center justify-center w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg">
-                      <Plus className="w-4 h-4 text-green-600 dark:text-green-400" />
+                    <div className="flex items-center justify-center w-8 h-8 bg-blue-100 dark:bg-blue-900/30 rounded-lg">
+                      <Settings className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        Add New Finding
+                        Configure Rule Status
                       </h3>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Create a new finding with your first comment
+                        Add a new status value
                       </p>
                     </div>
                   </div>
@@ -113,33 +110,46 @@ const AddThreadModal: React.FC<AddThreadModalProps> = ({
               {/* Content */}
               <form onSubmit={handleSubmit}>
                 <div className="px-6 py-4">
-                  {ruleDescription && (
-                    <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
-                        <span className="font-medium">Related Rule:</span> {ruleDescription}
-                      </p>
+                  <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                      <span className="font-medium">Current Status Values:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {existingStatuses.map((status) => (
+                        <span
+                          key={status}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                        >
+                          {status}
+                        </span>
+                      ))}
                     </div>
-                  )}
+                  </div>
                   
                   <div>
-                    <label htmlFor="finding-comment-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                      First Comment
+                    <label htmlFor="new-status-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      New Status Value
                     </label>
-                    <textarea
+                    <input
                       ref={inputRef}
-                      id="finding-comment-input"
-                      value={firstComment}
+                      id="new-status-input"
+                      type="text"
+                      value={newStatus}
                       onChange={handleInputChange}
-                      placeholder="Describe the finding or issue you've discovered..."
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-green-500 focus:border-green-500 dark:bg-gray-700 dark:text-gray-100 transition-colors duration-200 resize-none"
+                      placeholder="Enter a new status value..."
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-gray-100 transition-colors duration-200"
                       required
-                      maxLength={500}
-                      rows={4}
+                      maxLength={50}
                       autoComplete="off"
                       spellCheck="false"
                     />
+                    {isDuplicate && (
+                      <p className="mt-1 text-xs text-red-500 dark:text-red-400">
+                        This status value already exists
+                      </p>
+                    )}
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      {firstComment.length}/500 characters. Title will be auto-generated from first 10 words.
+                      {newStatus.length}/50 characters
                     </p>
                   </div>
                 </div>
@@ -155,18 +165,18 @@ const AddThreadModal: React.FC<AddThreadModalProps> = ({
                   </button>
                   <button
                     type="submit"
-                    disabled={!firstComment.trim() || isSubmitting}
-                    className="px-4 py-2 text-sm font-medium text-white bg-green-600 border border-transparent rounded-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 dark:focus:ring-offset-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center space-x-2"
+                    disabled={!newStatus.trim() || isSubmitting || isDuplicate}
+                    className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200 flex items-center space-x-2"
                   >
                     {isSubmitting ? (
                       <>
                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Creating...</span>
+                        <span>Adding...</span>
                       </>
                     ) : (
                       <>
                         <Plus className="w-4 h-4" />
-                        <span>Create Finding</span>
+                        <span>Add Status</span>
                       </>
                     )}
                   </button>
@@ -180,4 +190,11 @@ const AddThreadModal: React.FC<AddThreadModalProps> = ({
   );
 };
 
-export default AddThreadModal;
+export default ConfigureStatusModal;
+
+
+
+
+
+
+

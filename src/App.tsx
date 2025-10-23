@@ -1,12 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Header from './components/Header';
 import DataTable from './components/DataTable';
 import ChatPanel from './components/ChatPanel';
+import AddRuleModal from './components/AddRuleModal';
 import { useTheme } from './hooks/useTheme';
 import { Thread, Comment, FilterState, ChatPanelState, BusinessRule } from './types';
-import { mockBusinessRules, mockThreads, moduleNames, statusOptions, threadStatusOptions, businessRuleOptions, threadTitleOptions } from './data/mockData';
+import { mockBusinessRules, mockThreads } from './data/mockData';
 
 function App() {
   const { theme, toggleTheme } = useTheme();
@@ -32,10 +34,78 @@ function App() {
   const [threads, setThreads] = useState<Thread[]>(mockThreads);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
   const [expandedThreads, setExpandedThreads] = useState<Set<string>>(new Set());
+  const [businessRules, setBusinessRules] = useState<BusinessRule[]>(mockBusinessRules);
+  const [addRuleModalOpen, setAddRuleModalOpen] = useState(false);
+  const [customStatusValues, setCustomStatusValues] = useState<string[]>([]);
+
+  // Function to automatically update rule status based on findings
+  const updateRuleStatus = useCallback((ruleId: string) => {
+    const ruleThreads = threads.filter(thread => thread.ruleId === ruleId);
+    
+    console.log(`Updating rule ${ruleId}:`, ruleThreads.map(t => ({ title: t.title, actionStatus: t.actionStatus })));
+    
+    if (ruleThreads.length === 0) {
+      // No findings - keep current status
+      return;
+    }
+    
+    // Check if any finding is Error
+    const hasErrorFinding = ruleThreads.some(thread => thread.actionStatus === 'Error');
+    console.log(`Has error finding: ${hasErrorFinding}`);
+    
+    if (hasErrorFinding) {
+      // Auto-set to Fail if any finding is Error
+      console.log(`Setting rule ${ruleId} to Fail`);
+      setBusinessRules(prev => prev.map(rule => 
+        rule.id === ruleId && rule.status !== 'Fail'
+          ? { ...rule, status: 'Fail', updatedAt: new Date().toISOString() }
+          : rule
+      ));
+    } else {
+      // Check if all findings are Non-Error or Mere Observation (regardless of open/closed status)
+      const allAcceptableStatus = ruleThreads.every(thread => 
+        thread.actionStatus === 'Non-Error' || thread.actionStatus === 'Mere Observation'
+      );
+      
+      console.log(`All acceptable status: ${allAcceptableStatus}`);
+      
+      if (allAcceptableStatus) {
+        // Auto-set to Pass if all findings have acceptable action status
+        console.log(`Setting rule ${ruleId} to Pass`);
+        setBusinessRules(prev => prev.map(rule => {
+          if (rule.id === ruleId && rule.status !== 'Pass') {
+            // Check if this rule has any comments across all its threads
+            const hasComments = ruleThreads.some(thread => 
+              thread.comments && thread.comments.length > 0
+            );
+            
+            return { 
+              ...rule, 
+              status: 'Pass', 
+              updatedAt: new Date().toISOString(),
+              hasPassedNoComments: !hasComments
+            };
+          }
+          return rule;
+        }));
+      }
+    }
+  }, [threads]);
+
+  // Update rule statuses on component mount and when threads change
+  useEffect(() => {
+    // Get all unique rule IDs from threads
+    const ruleIds = Array.from(new Set(threads.map(thread => thread.ruleId)));
+    
+    // Update status for each rule
+    ruleIds.forEach(ruleId => {
+      setTimeout(() => updateRuleStatus(ruleId), 100);
+    });
+  }, [threads, updateRuleStatus]);
 
   // Filter business rules based on current filters
   const filteredRules = useMemo(() => {
-    return mockBusinessRules.filter((rule: BusinessRule) => {
+    return businessRules.filter((rule: BusinessRule) => {
       const moduleMatch = filters.moduleName === 'All' || rule.moduleName === filters.moduleName;
       const statusMatch = filters.status.includes('All') || filters.status.includes(rule.status);
       const businessRuleMatch = filters.businessRule.includes('All') || filters.businessRule.includes(rule.description);
@@ -49,7 +119,7 @@ function App() {
       
       return moduleMatch && statusMatch && businessRuleMatch && threadTitleMatch;
     });
-  }, [filters, threads]);
+  }, [filters, threads, businessRules]);
 
   // Get threads for the currently selected rule or specific thread
   const currentRuleThreads = useMemo(() => {
@@ -86,8 +156,8 @@ function App() {
   // Get the current rule being discussed
   const currentRule = useMemo(() => {
     if (!chatPanel.ruleId) return null;
-    return mockBusinessRules.find((rule: BusinessRule) => rule.id === chatPanel.ruleId) || null;
-  }, [chatPanel.ruleId]);
+    return businessRules.find((rule: BusinessRule) => rule.id === chatPanel.ruleId) || null;
+  }, [chatPanel.ruleId, businessRules]);
 
   const handleOpenChat = (ruleId: string, threadId?: string) => {
     const chatKey = threadId ? `${ruleId}-${threadId}` : ruleId;
@@ -138,24 +208,65 @@ function App() {
     }));
   };
 
-  const handleAddThread = (ruleId: string, title: string) => {
+  const handleAddThread = (ruleId: string, title: string, firstComment?: string) => {
     const now = new Date();
     const dueDate = new Date(now.getTime() + (3 * 24 * 60 * 60 * 1000)); // P2: 3 days SLA
+    
+    const comments = firstComment ? [{
+      id: `comment-${Date.now()}`,
+      text: firstComment,
+      author: 'QC' as const,
+      timestamp: now.toISOString(),
+      threadId: `thread-${Date.now()}`,
+      isRead: false
+    }] : [];
     
     const newThread: Thread = {
       id: `thread-${Date.now()}`,
       title,
       ruleId,
       status: 'Open',
-      actionStatus: 'Action Required',
+      actionStatus: 'Error',
       priority: 'P2',
-      comments: [],
+      comments,
       dueDate: dueDate.toISOString(),
       createdAt: now.toISOString(),
       updatedAt: now.toISOString()
     };
     
     setThreads(prev => [...prev, newThread]);
+    
+    // Update rule status after adding thread
+    setTimeout(() => updateRuleStatus(ruleId), 100);
+  };
+
+  const handleAddRule = (moduleName: string, description: string, severity: string) => {
+    const newRule: BusinessRule = {
+      id: `rule-${Date.now()}`,
+      ruleNo: Math.max(...businessRules.map(r => r.ruleNo), 0) + 1,
+      description: description,
+      qcComment: '',
+      smComment: '',
+      status: 'Open',
+      moduleName: moduleName,
+      businessRule: description,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      severity: severity as 'Critical' | 'Major' | 'Significant',
+      isNA: false,
+      hasPassedNoComments: false
+    };
+    
+    setBusinessRules(prev => [...prev, newRule]);
+  };
+
+  const handleAddRuleClick = () => {
+    setAddRuleModalOpen(true);
+  };
+
+  const handleAddRuleConfirm = (description: string, severity: string) => {
+    handleAddRule('Warehouse Safety Checks', description, severity);
+    setAddRuleModalOpen(false);
   };
 
   const handleAddComment = (threadId: string, text: string, author: 'QC' | 'SM') => {
@@ -192,27 +303,47 @@ function App() {
   };
 
   const handleCloseThread = (threadId: string) => {
-    setThreads(prev => prev.map(thread => 
-      thread.id === threadId 
-        ? { 
-            ...thread, 
-            status: thread.status === 'Open' ? 'Closed' : 'Open',
-            updatedAt: new Date().toISOString()
-          }
-        : thread
-    ));
+    setThreads(prev => {
+      const updatedThreads = prev.map(thread => 
+        thread.id === threadId 
+          ? { 
+              ...thread, 
+              status: thread.status === 'Open' ? 'Closed' as const : 'Open' as const,
+              updatedAt: new Date().toISOString()
+            }
+          : thread
+      );
+      
+      // Update rule status after closing/opening thread
+      const updatedThread = updatedThreads.find(t => t.id === threadId);
+      if (updatedThread) {
+        setTimeout(() => updateRuleStatus(updatedThread.ruleId), 100);
+      }
+      
+      return updatedThreads;
+    });
   };
 
   const handleActionStatusChange = (threadId: string, newActionStatus: string) => {
-    setThreads(prev => prev.map(thread => 
-      thread.id === threadId 
-        ? { 
-            ...thread, 
-            actionStatus: newActionStatus as any,
-            updatedAt: new Date().toISOString()
-          }
-        : thread
-    ));
+    setThreads(prev => {
+      const updatedThreads = prev.map(thread => 
+        thread.id === threadId 
+          ? { 
+              ...thread, 
+              actionStatus: newActionStatus as any,
+              updatedAt: new Date().toISOString()
+            }
+          : thread
+      );
+      
+      // Update rule status after changing action status
+      const updatedThread = updatedThreads.find(t => t.id === threadId);
+      if (updatedThread) {
+        setTimeout(() => updateRuleStatus(updatedThread.ruleId), 100);
+      }
+      
+      return updatedThreads;
+    });
   };
 
   const handlePriorityChange = (threadId: string, newPriority: string) => {
@@ -233,6 +364,42 @@ function App() {
 
   const handleSizeChange = (size: { width: number; height: number }) => {
     setChatPanel(prev => ({ ...prev, size }));
+  };
+
+  const handleRuleStatusChange = (ruleId: string, newStatus: string) => {
+    setBusinessRules(prev => prev.map(rule => {
+      if (rule.id === ruleId) {
+        let updatedRule = { 
+          ...rule, 
+          status: newStatus as any,
+          updatedAt: new Date().toISOString()
+        };
+        
+        // If manually setting to Pass, check for comments
+        if (newStatus === 'Pass') {
+          const ruleThreads = threads.filter(thread => thread.ruleId === ruleId);
+          const hasComments = ruleThreads.some(thread => 
+            thread.comments && thread.comments.length > 0
+          );
+          updatedRule.hasPassedNoComments = !hasComments;
+        }
+        
+        return updatedRule;
+      }
+      return rule;
+    }));
+  };
+
+  const handleRuleSeverityChange = (ruleId: string, newSeverity: string) => {
+    setBusinessRules(prev => prev.map(rule => 
+      rule.id === ruleId 
+        ? { 
+            ...rule, 
+            severity: newSeverity as any,
+            updatedAt: new Date().toISOString()
+          }
+        : rule
+    ));
   };
 
   const handleToggleRow = (ruleId: string) => {
@@ -347,7 +514,7 @@ function App() {
     XLSX.writeFile(wb, filename);
   };
 
-  const actionStatusOptions = ['Action Required', 'In Progress', 'Completed', 'On Hold', 'No Error', 'Error'];
+  const actionStatusOptions = ['Error', 'Non-Error', 'Mere Observation'];
   const priorityOptions = [
     { value: 'P1', label: 'P1 - Severe' },
     { value: 'P2', label: 'P2 - Moderate' },
@@ -361,13 +528,8 @@ function App() {
         onFilterChange={setFilters}
         theme={theme}
         onThemeToggle={toggleTheme}
-        moduleNames={moduleNames}
-        statusOptions={statusOptions}
-        threadStatusOptions={threadStatusOptions}
-        businessRuleOptions={businessRuleOptions}
-        threadTitleOptions={threadTitleOptions}
         threads={threads}
-        businessRules={mockBusinessRules}
+        businessRules={businessRules}
         onExport={handleExport}
       />
 
@@ -377,6 +539,62 @@ function App() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
+          {/* Configuration Section */}
+          <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+                  Configuration: Warehouse Safety Checks
+                </h2>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="config-na-checkbox"
+                    checked={filters.isNA || false}
+                    onChange={(e) => setFilters({
+                      ...filters,
+                      isNA: e.target.checked,
+                      naReason: e.target.checked ? (filters.naReason || '') : ''
+                    })}
+                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="config-na-checkbox" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    N/A
+                  </label>
+                </div>
+                {filters.isNA && (
+                  <div className="flex items-center space-x-2">
+                    <label htmlFor="na-reason" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Reason:
+                    </label>
+                    <input
+                      type="text"
+                      id="na-reason"
+                      value={filters.naReason || ''}
+                      onChange={(e) => setFilters({
+                        ...filters,
+                        naReason: e.target.value
+                      })}
+                      placeholder="Enter reason for N/A..."
+                      className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-primary-500 focus:border-transparent w-64"
+                    />
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleAddRuleClick}
+                disabled={filters.isNA}
+                className={`inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white transition-colors duration-200 ${
+                  filters.isNA 
+                    ? 'bg-gray-400 cursor-not-allowed' 
+                    : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+                }`}
+              >
+                <Plus className="h-3 w-3 mr-1" />
+                Add Rule
+              </button>
+            </div>
+          </div>
           <DataTable
             rules={filteredRules}
             threads={threads}
@@ -389,11 +607,17 @@ function App() {
             onActionStatusChange={handleActionStatusChange}
             onPriorityChange={handlePriorityChange}
             onAddThread={handleAddThread}
+            onAddComment={handleAddComment}
+            onRuleStatusChange={handleRuleStatusChange}
+            onRuleSeverityChange={handleRuleSeverityChange}
             actionStatusOptions={actionStatusOptions}
             priorityOptions={priorityOptions}
             threadStatusFilter={filters.threadStatus}
             threadTitleFilter={filters.threadTitle}
             businessRuleFilter={filters.businessRule}
+            isNA={filters.isNA || false}
+            customStatusValues={customStatusValues}
+            onAddCustomStatus={(status: string) => setCustomStatusValues(prev => [...prev, status])}
           />
         </motion.div>
       </main>
@@ -414,6 +638,14 @@ function App() {
         size={chatPanel.size}
         onPositionChange={handlePositionChange}
         onSizeChange={handleSizeChange}
+      />
+
+      {/* Add Rule Modal */}
+      <AddRuleModal
+        isOpen={addRuleModalOpen}
+        onClose={() => setAddRuleModalOpen(false)}
+        onConfirm={handleAddRuleConfirm}
+        moduleName="Warehouse Safety Checks"
       />
     </div>
   );

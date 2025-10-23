@@ -201,11 +201,6 @@ interface HeaderProps {
   onFilterChange: (filters: FilterState) => void;
   theme: Theme;
   onThemeToggle: () => void;
-  moduleNames: string[];
-  statusOptions: string[];
-  threadStatusOptions: string[];
-  businessRuleOptions: string[];
-  threadTitleOptions: string[];
   threads: Thread[];
   businessRules: BusinessRule[];
   onExport: () => void;
@@ -216,11 +211,6 @@ const Header: React.FC<HeaderProps> = ({
   onFilterChange,
   theme,
   onThemeToggle,
-  moduleNames,
-  statusOptions,
-  threadStatusOptions,
-  businessRuleOptions,
-  threadTitleOptions,
   threads,
   businessRules,
   onExport
@@ -283,9 +273,12 @@ const Header: React.FC<HeaderProps> = ({
   }, []);
 
   const handleClearAllFilters = useCallback(() => {
+    // Get the first available module name or default to 'All'
+    const defaultModule = businessRules.length > 0 ? businessRules[0].moduleName : 'All';
+    
     // Reset all filters to their default values
     onFilterChange({
-      moduleName: 'Warehouse Safety Checks',
+      moduleName: defaultModule,
       status: ['All'],
       threadStatus: ['All'],
       businessRule: ['All'],
@@ -303,14 +296,16 @@ const Header: React.FC<HeaderProps> = ({
     
     // Close any open dropdowns
     setActiveDropdown(null);
-  }, [onFilterChange]);
+  }, [onFilterChange, businessRules]);
 
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     // Handle moduleName as single string
     if (key === 'moduleName') {
       onFilterChange({
         ...filters,
-        [key]: value
+        [key]: value,
+        // Reset business rule filter when module changes
+        businessRule: ['All']
       });
       return;
     }
@@ -351,45 +346,89 @@ const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  // Generate dynamic module names from business rules
+  const dynamicModuleNames = useMemo(() => {
+    const uniqueModules = Array.from(new Set(businessRules.map(rule => rule.moduleName)));
+    return ['All', ...uniqueModules];
+  }, [businessRules]);
+
   // Filter options based on search queries
   const filteredModuleNames = useMemo(() => {
-    if (!searchQueries.moduleName) return moduleNames;
-    return moduleNames.filter(module => 
+    if (!searchQueries.moduleName) return dynamicModuleNames;
+    return dynamicModuleNames.filter(module => 
       module.toLowerCase().includes(searchQueries.moduleName.toLowerCase())
     );
-  }, [moduleNames, searchQueries.moduleName]);
+  }, [dynamicModuleNames, searchQueries.moduleName]);
+
+  // Generate cascading business rule options based on selected module name
+  const cascadingBusinessRuleOptions = useMemo(() => {
+    if (filters.moduleName === 'All') {
+      // When "All" is selected, show all business rule descriptions
+      const allRules = Array.from(new Set(businessRules.map(rule => rule.description)));
+      return ['All', ...allRules];
+    }
+    
+    // Find business rules that belong to the selected module
+    const moduleRules = businessRules.filter(rule => rule.moduleName === filters.moduleName);
+    if (moduleRules.length === 0) {
+      // If no rules match, show all business rule descriptions
+      const allRules = Array.from(new Set(businessRules.map(rule => rule.description)));
+      return ['All', ...allRules];
+    }
+    
+    // Extract unique business rule descriptions from rules belonging to this module
+    const uniqueRules = Array.from(new Set(moduleRules.map(rule => rule.description)));
+    
+    return ['All', ...uniqueRules];
+  }, [filters.moduleName, businessRules]);
 
   const filteredBusinessRules = useMemo(() => {
-    if (!searchQueries.businessRule) return businessRuleOptions;
-    return businessRuleOptions.filter(rule => 
+    if (!searchQueries.businessRule) return cascadingBusinessRuleOptions;
+    return cascadingBusinessRuleOptions.filter(rule => 
       rule.toLowerCase().includes(searchQueries.businessRule.toLowerCase())
     );
-  }, [businessRuleOptions, searchQueries.businessRule]);
+  }, [cascadingBusinessRuleOptions, searchQueries.businessRule]);
+
+  // Generate dynamic status options from business rules
+  const dynamicStatusOptions = useMemo(() => {
+    const uniqueStatuses = Array.from(new Set(businessRules.map(rule => rule.status)));
+    return ['All', ...uniqueStatuses];
+  }, [businessRules]);
 
   const filteredStatusOptions = useMemo(() => {
-    if (!searchQueries.status) return statusOptions;
-    return statusOptions.filter(status => 
+    if (!searchQueries.status) return dynamicStatusOptions;
+    return dynamicStatusOptions.filter(status => 
       status.toLowerCase().includes(searchQueries.status.toLowerCase())
     );
-  }, [statusOptions, searchQueries.status]);
+  }, [dynamicStatusOptions, searchQueries.status]);
+
+  // Generate dynamic thread status options from threads
+  const dynamicThreadStatusOptions = useMemo(() => {
+    const uniqueStatuses = Array.from(new Set(threads.map(thread => thread.actionStatus)));
+    return ['All', ...uniqueStatuses];
+  }, [threads]);
 
   const filteredThreadStatusOptions = useMemo(() => {
-    if (!searchQueries.threadStatus) return threadStatusOptions;
-    return threadStatusOptions.filter(status => 
+    if (!searchQueries.threadStatus) return dynamicThreadStatusOptions;
+    return dynamicThreadStatusOptions.filter(status => 
       status.toLowerCase().includes(searchQueries.threadStatus.toLowerCase())
     );
-  }, [threadStatusOptions, searchQueries.threadStatus]);
+  }, [dynamicThreadStatusOptions, searchQueries.threadStatus]);
 
   // Generate cascading thread title options based on selected business rule
   const cascadingThreadTitleOptions = useMemo(() => {
     if (filters.businessRule.includes('All')) {
-      return threadTitleOptions;
+      // When "All" is selected, show all thread titles from all threads
+      const allTitles = Array.from(new Set(threads.map(thread => thread.title)));
+      return ['All', ...allTitles];
     }
     
     // Find threads that belong to any of the selected business rules
     const selectedRules = businessRules.filter(rule => filters.businessRule.includes(rule.description));
     if (selectedRules.length === 0) {
-      return threadTitleOptions;
+      // If no rules match, show all thread titles
+      const allTitles = Array.from(new Set(threads.map(thread => thread.title)));
+      return ['All', ...allTitles];
     }
     
     // Find threads that belong to any of the selected business rules
@@ -400,7 +439,7 @@ const Header: React.FC<HeaderProps> = ({
     const uniqueTitles = Array.from(new Set(ruleThreads.map(thread => thread.title)));
     
     return ['All', ...uniqueTitles];
-  }, [filters.businessRule, threads, businessRules, threadTitleOptions]);
+  }, [filters.businessRule, threads, businessRules]);
 
   const filteredThreadTitleOptions = useMemo(() => {
     if (!searchQueries.threadTitle) return cascadingThreadTitleOptions;
@@ -418,9 +457,6 @@ const Header: React.FC<HeaderProps> = ({
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
               QC Checklist
             </h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-              Configuration: {filters.moduleName || 'Warehouse Safety Checks'}
-            </p>
           </div>
           <div className="flex items-center space-x-3">
             <button
@@ -447,88 +483,85 @@ const Header: React.FC<HeaderProps> = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-          <SingleSelectDropdown
-            filterKey="moduleName"
-            label="Module Name"
-            value={filters.moduleName}
-            options={filteredModuleNames}
-            searchValue={searchQueries.moduleName}
-            onFilterChange={handleFilterChange}
-            onSearchChange={handleSearchChange}
-            onClearSearch={clearSearch}
-            isActive={activeDropdown === 'moduleName'}
-            onFocus={handleFocus}
-            onClose={() => setActiveDropdown(null)}
-          />
+        <div className="flex items-end gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
+            <SingleSelectDropdown
+              filterKey="moduleName"
+              label="Module Name"
+              value={filters.moduleName}
+              options={filteredModuleNames}
+              searchValue={searchQueries.moduleName}
+              onFilterChange={handleFilterChange}
+              onSearchChange={handleSearchChange}
+              onClearSearch={clearSearch}
+              isActive={activeDropdown === 'moduleName'}
+              onFocus={handleFocus}
+              onClose={() => setActiveDropdown(null)}
+            />
 
-          <SearchableDropdown
-            filterKey="businessRule"
-            label="Business Rule"
-            values={filters.businessRule}
-            options={filteredBusinessRules}
-            searchValue={searchQueries.businessRule}
-            onFilterChange={handleFilterChange}
-            onSearchChange={handleSearchChange}
-            onClearSearch={clearSearch}
-            isActive={activeDropdown === 'businessRule'}
-            onFocus={handleFocus}
-            onClose={() => setActiveDropdown(null)}
-          />
+            <SearchableDropdown
+              filterKey="businessRule"
+              label="Business Rule"
+              values={filters.businessRule}
+              options={filteredBusinessRules}
+              searchValue={searchQueries.businessRule}
+              onFilterChange={handleFilterChange}
+              onSearchChange={handleSearchChange}
+              onClearSearch={clearSearch}
+              isActive={activeDropdown === 'businessRule'}
+              onFocus={handleFocus}
+              onClose={() => setActiveDropdown(null)}
+            />
 
-          <SearchableDropdown
-            filterKey="status"
-            label="Status"
-            values={filters.status}
-            options={filteredStatusOptions}
-            searchValue={searchQueries.status}
-            onFilterChange={handleFilterChange}
-            onSearchChange={handleSearchChange}
-            onClearSearch={clearSearch}
-            isActive={activeDropdown === 'status'}
-            onFocus={handleFocus}
-            onClose={() => setActiveDropdown(null)}
-          />
+            <SearchableDropdown
+              filterKey="status"
+              label="Rule Status"
+              values={filters.status}
+              options={filteredStatusOptions}
+              searchValue={searchQueries.status}
+              onFilterChange={handleFilterChange}
+              onSearchChange={handleSearchChange}
+              onClearSearch={clearSearch}
+              isActive={activeDropdown === 'status'}
+              onFocus={handleFocus}
+              onClose={() => setActiveDropdown(null)}
+            />
 
-          <SearchableDropdown
-            filterKey="threadStatus"
-            label="Thread Status"
-            values={filters.threadStatus}
-            options={filteredThreadStatusOptions}
-            searchValue={searchQueries.threadStatus}
-            onFilterChange={handleFilterChange}
-            onSearchChange={handleSearchChange}
-            onClearSearch={clearSearch}
-            isActive={activeDropdown === 'threadStatus'}
-            onFocus={handleFocus}
-            onClose={() => setActiveDropdown(null)}
-          />
+            <SearchableDropdown
+              filterKey="threadStatus"
+              label="Finding Status"
+              values={filters.threadStatus}
+              options={filteredThreadStatusOptions}
+              searchValue={searchQueries.threadStatus}
+              onFilterChange={handleFilterChange}
+              onSearchChange={handleSearchChange}
+              onClearSearch={clearSearch}
+              isActive={activeDropdown === 'threadStatus'}
+              onFocus={handleFocus}
+              onClose={() => setActiveDropdown(null)}
+            />
 
-          <div className="flex items-end gap-4">
-            <div className="flex-1">
-              <SearchableDropdown
-                filterKey="threadTitle"
-                label="Thread Title"
-                values={filters.threadTitle}
-                options={filteredThreadTitleOptions}
-                searchValue={searchQueries.threadTitle}
-                onFilterChange={handleFilterChange}
-                onSearchChange={handleSearchChange}
-                onClearSearch={clearSearch}
-                isActive={activeDropdown === 'threadTitle'}
-                onFocus={handleFocus}
-                onClose={() => setActiveDropdown(null)}
-              />
-            </div>
-            <button
-              onClick={handleClearAllFilters}
-              className="p-2 rounded-lg bg-red-100 dark:bg-red-900 hover:bg-red-200 dark:hover:bg-red-800 text-red-600 dark:text-red-400 transition-colors duration-200"
-              title="Clear all filters"
-            >
-              <RotateCcw className="h-5 w-5" />
-            </button>
+            <SearchableDropdown
+              filterKey="threadTitle"
+              label="Finding Title"
+              values={filters.threadTitle}
+              options={filteredThreadTitleOptions}
+              searchValue={searchQueries.threadTitle}
+              onFilterChange={handleFilterChange}
+              onSearchChange={handleSearchChange}
+              onClearSearch={clearSearch}
+              isActive={activeDropdown === 'threadTitle'}
+              onFocus={handleFocus}
+              onClose={() => setActiveDropdown(null)}
+            />
           </div>
-
+          <button
+            onClick={handleClearAllFilters}
+            className="p-2 rounded-lg bg-red-100 dark:bg-red-900 hover:bg-red-200 dark:hover:bg-red-800 text-red-600 dark:text-red-400 transition-colors duration-200 flex-shrink-0"
+            title="Clear all filters"
+          >
+            <RotateCcw className="h-5 w-5" />
+          </button>
         </div>
       </div>
     </header>
