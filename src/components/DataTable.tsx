@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronDown, ChevronRight, Plus, X, AlertTriangle, Calendar, Lock } from 'lucide-react';
 import { BusinessRule, Thread, Comment } from '../types';
 import AddThreadModal from './AddThreadModal';
-import ConfigureStatusModal from './ConfigureStatusModal';
 
 interface DataTableProps {
   rules: BusinessRule[];
@@ -57,8 +56,6 @@ const DataTable: React.FC<DataTableProps> = ({
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedRuleId, setSelectedRuleId] = useState<string>('');
   const [selectedRuleDescription, setSelectedRuleDescription] = useState<string>('');
-  const [configureModalOpen, setConfigureModalOpen] = useState(false);
-  const [selectedRuleForConfig, setSelectedRuleForConfig] = useState<string>('');
   const [closeThreadDialog, setCloseThreadDialog] = useState<{
     isOpen: boolean;
     thread: Thread | null;
@@ -429,12 +426,7 @@ const DataTable: React.FC<DataTableProps> = ({
                         <select
                           value={rule.status}
                           onChange={(e) => {
-                            if (e.target.value === 'Configure') {
-                              setSelectedRuleForConfig(rule.id);
-                              setConfigureModalOpen(true);
-                            } else {
-                              onRuleStatusChange(rule.id, e.target.value);
-                            }
+                            onRuleStatusChange(rule.id, e.target.value);
                           }}
                           disabled={isNA}
                           className={`text-xs border-0 rounded-full px-2 py-1 font-medium focus:ring-2 focus:ring-primary-500 focus:outline-none transition-colors duration-200 ${
@@ -457,7 +449,6 @@ const DataTable: React.FC<DataTableProps> = ({
                           {customStatusValues.map((status) => (
                             <option key={status} value={status}>{status}</option>
                           ))}
-                          <option value="Configure">Configure</option>
                         </select>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
@@ -949,17 +940,6 @@ const DataTable: React.FC<DataTableProps> = ({
         )}
       </AnimatePresence>
 
-      {/* Configure Status Modal */}
-      <ConfigureStatusModal
-        isOpen={configureModalOpen}
-        onClose={() => setConfigureModalOpen(false)}
-        onAddStatus={(newStatus: string) => {
-          // Add the new status to custom status values
-          onAddCustomStatus(newStatus);
-          setConfigureModalOpen(false);
-        }}
-        existingStatuses={['All', 'Pass', 'Fail', 'N/A', ...customStatusValues]}
-      />
     </div>
   );
 };

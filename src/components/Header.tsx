@@ -529,7 +529,7 @@ const Header: React.FC<HeaderProps> = ({
 
             <SearchableDropdown
               filterKey="threadStatus"
-              label="Finding Status"
+              label="Finding Category"
               values={filters.threadStatus}
               options={filteredThreadStatusOptions}
               searchValue={searchQueries.threadStatus}
